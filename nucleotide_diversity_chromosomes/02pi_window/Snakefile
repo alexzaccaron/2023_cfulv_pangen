@@ -1,0 +1,142 @@
+
+# Snakemake pipeline to calculate average nucleotide diversity per site based on the output of SyRI
+
+
+SAMPLES=["R4", "R5", "W4", "W7"]
+
+
+rule all:
+   input:
+      expand("output/04index_vcf/{sample}_syri_SNPs_gt.vcf.gz.tbi", sample=SAMPLES),
+      "output/06gt_matrix/merged_syri_SNPs_gt_dedup.txt",
+      "output/07pi/merged_syri_SNPs_gt_dedup_pi.txt"
+
+
+
+##vcfasm: Get SNPs and INDELs from VCF file produced by SyRI
+rule vcfasm:
+   input:
+      "data/{sample}_syri.vcf"
+   output:
+      "output/01vcfasm/{sample}_syri_SNPs_INDELs.vcf"
+   shell: """
+      VCFASM=~/programs/syri/syri/scripts/vcfasm
+
+      python $VCFASM vcfshv {input} {output}
+   """
+
+
+
+##remove_INDELs: Remove INDELs, keep only SNPs
+rule remove_INDELs:
+   input:
+      "output/01vcfasm/{sample}_syri_SNPs_INDELs.vcf"
+   output:
+      "output/02SNPs/{sample}_syri_SNPs.vcf"
+   shell: """
+      awk '{{ if(substr($3,1,3) == "SNP" || substr($1,1,1) == "#") print $0 }}' {input} > {output}
+   """
+
+
+
+##add_genotype_vcf: format vcf to add genotype field
+rule add_genotype_vcf:
+   input:
+      "output/02SNPs/{sample}_syri_SNPs.vcf"
+   output:
+      "output/03gt_vcfs/{sample}_syri_SNPs_gt.vcf"
+   shell: """
+      
+      # first get header 
+      grep ^## {input} > {output}
+      
+      # then add genotype to header
+      echo "##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">" >> {output}
+      
+      # then add FORMAT and sample name to column names
+      grep  ^#CHROM {input} | awk '{{ print $0"\\tFORMAT\\t{wildcards.sample}" }}' >> {output}
+
+      # then copy vcf body and add GT field. Always altergantive allele because only one sample.
+      grep -v ^# {input} | awk '{{ print $0"\\tGT\\t1" }}' >> {output}
+   """
+
+
+
+##compress_vcf: compress vcf before index
+rule compress_vcf:
+   input:
+      "output/03gt_vcfs/{sample}_syri_SNPs_gt.vcf"
+   output:
+      "output/04index_vcf/{sample}_syri_SNPs_gt.vcf.gz"
+   shell: """
+      bgzip -c {input} > {output}
+   """
+
+
+
+##index_vcf: index vcf with tabix
+rule index_vcf:
+   input:
+      "output/04index_vcf/{sample}_syri_SNPs_gt.vcf.gz"
+   output:
+      "output/04index_vcf/{sample}_syri_SNPs_gt.vcf.gz.tbi"
+   shell: """
+      tabix -p vcf {input}
+   """
+
+
+
+##merge_vcf: merge indexed vcf files, add reference allele instead of missing allele
+rule merge_vcf:
+   input:
+      index=expand("output/04index_vcf/{sample}_syri_SNPs_gt.vcf.gz.tbi", sample=SAMPLES),
+      vcfs=expand("output/04index_vcf/{sample}_syri_SNPs_gt.vcf.gz", sample=SAMPLES)
+   output:
+      "output/05merge_vcf/merged_syri_SNPs_gt.vcf"
+   shell: """
+      export PATH=$PATH:~/programs/bcftools-1.16/
+
+      bcftools merge --missing-to-ref {input.vcfs} -o {output}
+   """
+
+
+
+##filter_dup_snps: remove duplicated entries. I gues SyRI keeps them when a segment aligns to multiple locations
+rule filter_dup_snps:
+   input:
+      "output/05merge_vcf/merged_syri_SNPs_gt.vcf"
+   output:
+      "output/05merge_vcf/merged_syri_SNPs_gt_dedup.vcf"
+   shell: """
+      export PATH=$PATH:~/programs/bcftools-1.16/
+
+      bcftools norm --rm-dup snps {input} > {output}
+   """
+
+
+
+##get_genotype_matrix: extract a genotype matrix from the merged vcf file
+rule get_genotype_matrix:
+   input:
+      "output/05merge_vcf/merged_syri_SNPs_gt_dedup.vcf"
+   output:
+      "output/06gt_matrix/merged_syri_SNPs_gt_dedup.txt"
+   shell: """
+      cat {input} | grep -v ^## | cut -f 1,2,10-20 | sed 's/^#CHROM/CHROM/g' > {output}
+   """
+
+
+
+##get_window_pi: calculate pi using a sliding window
+rule get_window_pi:
+   input:
+      "output/06gt_matrix/merged_syri_SNPs_gt_dedup.txt"
+   output:
+      "output/07pi/merged_syri_SNPs_gt_dedup_pi.txt"
+   shell: """
+      Rscript scripts/calculate_window_pi.R {input} {output}
+   """
+
+
+
+
