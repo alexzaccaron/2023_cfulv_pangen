@@ -1,12 +1,11 @@
 
-
 #=== Functions ====
 calc_gt_pi <- function(gt_tab, w_size){
   
   if(nrow(gt_tab) == 0) return(0)
   
   # get only the genotypes
-  gt = gt_tab[,-1:-2]
+  gt = gt_tab[,-1:-4]
   
   # indices of possible combinations
   comb_index = combn(ncol(gt), 2)
@@ -40,6 +39,18 @@ get_gt_window <- function(gt_tab, start, end){
   
   return(gt)
 }
+
+
+get_chr_size <- function( CHROMO, fname_fai ){
+   
+   fai = read.table(fname_fai, col.names = c("name", "length", "offset", "linebases", "linewidth"))
+
+   size = fai[fai$name == CHROMO, 'length']
+
+   return(size)
+}
+
+
 #==================
 
 
@@ -48,7 +59,9 @@ args = commandArgs(trailingOnly = T)
 
 
 in_fname  = args[1] # input genotype matrix
-out_fname = args[2] # output table with pi values
+in_fname_fai = args[2] # input faidx fai to get chromo size
+out_fname = args[3] # output table with pi values
+
 
 # Read genotype matrix
 gt_tab = read.table(in_fname, header = T)
@@ -62,14 +75,15 @@ res = NULL # results table
 for( chr in names(table(gt_tab$CHROM))){
   
   gt_tab_chr = gt_tab[gt_tab$CHROM == chr,]
-  
+  gt_tab_chr = gt_tab_chr[!is.na(gt_tab_chr$REF),] # remove NAs?
+
   # start window
   w_start = 1
-  w_size = 5000
-  w_step = 5000
+  w_size = 20000
+  w_step = 20000
   
   # last SNP position
-  last_pos = gt_tab_chr[nrow(gt_tab_chr),'POS']
+  last_pos = get_chr_size( chr,  in_fname_fai)
   
   
   
@@ -91,7 +105,6 @@ res = as.data.frame(res)
 colnames(res) = c("chr", "start", "end", "pi")
 
 write.table(res, out_fname, quote = F, row.names = F, sep = '\t')
-
 
 
 

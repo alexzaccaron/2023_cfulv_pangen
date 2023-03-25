@@ -15,7 +15,9 @@ chr1	6260	0	1	1	1
 chr1	9361	1	1	1	0
 ```
 
-The R script `calculate_window_pi.R` will read this table, add the reference genotype (0), and then calculate pi within windows. The logic to calculate pi is described below. Consider a window of size 1 kb. The first window will include the first three SNPs of the table able, which can be represented as the following three binary strings. Note that the first 4 digits correspond to the genotype of the four samples shown in the table abovem, and the last digit correspond to the reference genome.
+The R script `split_tstv.R` splits the genotype table into two tables, one with only transitions, and the other with only transversions.
+
+The R script `calculate_window_pi.R` will read the genotype table, add the reference genotype (0), and then calculate pi within windows. The logic to calculate pi is described below. Consider a window of size 1 kb. The first window will include the first three SNPs of the table able, which can be represented as the following three binary strings. Note that the first 4 digits correspond to the genotype of the four samples shown in the table above, and the last digit corresponds to the reference genome.
 
 ```
 11000
