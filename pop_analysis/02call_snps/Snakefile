@@ -1,0 +1,110 @@
+
+# Snakemake pipeline to call SNPs and short INDELs
+
+SAMPLES=["CF301_rg", "CF-Nango_rg", "CFR5_rg", "W10_rg", "W12_rg", "W13_rg", "W14a_rg", "W15_rg", "W18_rg", "W20_rg", "W8_rg", "W9_rg", "R4", "W4", "W7"]
+
+
+rule all:
+   input:
+      expand("output/01freebayes/{sample}.vcf", sample=SAMPLES),
+      "output/03bcf_merge/variants_merged_filt.vcf",
+      "output/04vcftools_split/variants_merged_filt_SNPs.recode.vcf", 
+
+
+
+##freebayes: call polymorphisms
+rule freebayes:
+   conda: "env.yml"
+   input: 
+      ref="../01read_mapping/data/R0.fasta",
+      bam = "data/{sample}.bam"
+   output:
+      vcf="output/01freebayes/{sample}.vcf"
+   shell: """
+      freebayes -f {input.ref}   \
+         --ploidy 1              \
+         --min-alternate-count 3 \
+         --min-alternate-fraction 0.5 \
+         {input.bam} > {output.vcf}
+   """
+
+
+
+##vcftools: filter polymorphisms
+rule vcftools:
+   conda: "env.yml"
+   input:
+      "output/01freebayes/{sample}.vcf"
+   output:
+      "output/02vcftools/{sample}_filt.recode.vcf"
+   log:
+      "logs/vcftools_{sample}.log"
+   shell: """
+      vcftools --vcf {input} --minQ 50 --recode --recode-INFO-all --out output/02vcftools/{wildcards.sample}_filt > {log} 2>&1
+   """
+
+
+
+##vcf_bgzip: compress vcf file
+rule vcf_bgzip:
+   conda: "env.yml"
+   input:
+      "output/02vcftools/{sample}_filt.recode.vcf"
+   output:
+      "output/02vcftools/{sample}_filt.recode.vcf.gz"
+   shell: """
+      bgzip {input}
+   """
+
+
+
+##vcf_tabix: index compressed vcf file
+rule vcf_tabix:
+   conda: "env.yml"
+   input:
+      "output/02vcftools/{sample}_filt.recode.vcf.gz"
+   output:
+      "output/02vcftools/{sample}_filt.recode.vcf.gz.tbi"
+   shell: """
+      tabix -p vcf {input} 
+   """
+
+
+
+##bcf_merge: merge individual vcf files into one
+rule bcf_merge:
+   conda: "env.yml"
+   input:
+      index=expand("output/02vcftools/{sample}_filt.recode.vcf.gz.tbi", sample=SAMPLES),
+      vcf=expand("output/02vcftools/{sample}_filt.recode.vcf.gz", sample=SAMPLES)
+   output:
+      "output/03bcf_merge/variants_merged_filt.vcf"
+   shell: """
+      bcftools merge \
+         --missing-to-ref \
+         {input.vcf} > {output}
+   """
+
+
+
+##split_SNPs_INDELs: split vcf file into SNPS and INDELs
+rule split_SNPs_INDELs:
+   conda: "env.yml"
+   input:
+      vcf="output/03bcf_merge/variants_merged_filt.vcf"
+   output: 
+      snps="output/04vcftools_split/variants_merged_filt_SNPs.recode.vcf", 
+      indels="output/04vcftools_split/variants_merged_filt_INDELs.recode.vcf"
+   log:
+      removeIndels="logs/remove_indels.log",
+      keepIndels="logs/keep_indels.log"
+   shell: """
+       PREFIX=$(echo {output.snps} | cut -f 1 -d '.')
+       vcftools --vcf {input.vcf} --minQ 50 --remove-indels --max-alleles 2 --recode --recode-INFO-all --out $PREFIX > {log.removeIndels} 2>&1
+       PREFIX=$(echo {output.indels} | cut -f 1 -d '.')
+       vcftools --vcf {input.vcf} --minQ 50 --keep-only-indels --recode --recode-INFO-all --out $PREFIX > {log.keepIndels} 2>&1
+   """
+
+
+
+

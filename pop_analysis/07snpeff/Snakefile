@@ -1,0 +1,104 @@
+
+# Snakemake pipeline to annotate SNPs and identify genes likely with loss-of-function SNPs
+
+
+rule all:
+   input:
+      "output/02lof_genes/lof_snps_genes.txt",
+      "output/02lof_genes/lof_indels_genes.txt"
+
+
+
+##prepare_snpeffconfig: prepare files to build a database for SnpEff
+rule prepare_snpeffconfig:
+   conda: "env.yml"
+   input:
+      fasta="data/R0.fasta.gz",
+      gtf="data/PB655_01_combined_filt_orffinder.gtf.gz",
+      protein="data/R0.aa.gz",
+      cds="data/R0.cds.gz"
+   output: 
+      "snpeff_db_prep_ok"
+   shell: """
+       SNPEFF_CONFIG=$(find .snakemake/conda/ -name snpEff.config)
+       SNPEFF_PATH=$(dirname $SNPEFF_CONFIG)
+       echo "# C. fulvum 0WU genome"    >> $SNPEFF_CONFIG
+       echo "0WU.genome : 0WU"          >> $SNPEFF_CONFIG
+       
+       mkdir -p $SNPEFF_PATH/data/0WU
+       cp {input.fasta}   $SNPEFF_PATH/data/0WU/sequences.fa.gz
+       cp {input.gtf}     $SNPEFF_PATH/data/0WU/genes.gtf.gz
+       cp {input.protein} $SNPEFF_PATH/data/0WU/protein.fa.gz
+       cp {input.cds}     $SNPEFF_PATH/data/0WU/cds.fa.gz
+
+       touch {output}
+   """
+   
+   
+##build_snpeffDB: build a database for SnpEff
+rule build_snpeffDB:
+   conda: "env.yml"
+   input: 
+      "snpeff_db_prep_ok"
+   output: 
+      "snpeff_db_build_ok"
+   log:
+      "logs/snpeff_build.log"
+   shell: """    
+       SNPEFF_CONFIG=$(find .snakemake/conda/ -name snpEff.config)  
+       snpEff build -config $SNPEFF_CONFIG -gtf22 -v 0WU > {log} 2>&1
+      
+      touch {output}
+   """
+
+
+
+##snpeff_ann_snps: annotate SNPs with SnpEff
+rule snpeff_ann_snps:
+   conda: "env.yml"
+   input: 
+      snps="data/variants_merged_filt_SNPs.recode.vcf",
+      rep="snpeff_db_build_ok"
+   output: 
+      snps="output/01snpeff/variants_filt_SNPs.recode.ann.vcf",
+   log:
+      "logs/snpeff_ann_snps.log",
+   shell: """    
+       snpEff \
+          -v 0WU {input.snps} \
+          -htmlStats output/01snpeff/snps_summary.html > {output.snps} 2> {log}
+   """
+
+
+
+##snpeff_ann_indels: annotate INDELs with SnpEff
+rule snpeff_ann_indels:
+   conda: "env.yml"
+   input: 
+      indels="data/variants_merged_filt_INDELs.recode.vcf",
+      rep="snpeff_db_build_ok"
+   output: 
+      indels="output/01snpeff/variants_filt_INDELs.recode.ann.vcf"
+   log:
+      "logs/snpeff_ann_indels.log",
+   shell: """    
+       snpEff \
+          -v 0WU {input.indels} \
+          -htmlStats output/01snpeff/indels_summary.html > {output.indels} 2> {log}
+   """
+
+
+
+##get_lof_genes: get genes with predicted loss-of-function mutations
+rule get_lof_genes:
+   conda: "env.yml"
+   input: 
+      "data/variants_merged_filt_SNPs.recode.vcf",
+      "output/01snpeff/variants_filt_INDELs.recode.ann.vcf"
+   output: 
+      "output/02lof_genes/lof_snps_genes.txt",
+      "output/02lof_genes/lof_indels_genes.txt"
+   shell: """    
+       Rscript scripts/get_lof_genes.R 
+   """ 
+

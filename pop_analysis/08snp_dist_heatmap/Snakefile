@@ -1,0 +1,34 @@
+
+
+# Snakemake pipeline to calculate pairwise distances of fasta sequences and make a heatmap of the distances
+
+rule all:
+   input:
+      "output/snps_dist_heatmap.pdf"
+
+
+
+##snps_dist: estimate pairwise distances as number of segregating sites
+rule snps_dist:
+   conda: "env.yml"
+   input:
+      "data/variants_combined_ref.fasta"
+   output:
+      "output/snps_dist.txt"
+   shell: """
+      snp-dists {input} > {output}
+   """
+
+
+
+##plot_heatmap: plot a heatmap of the distances
+rule plot_heatmap:
+   input:
+      "output/snps_dist.txt"
+   output:
+      "output/snps_dist_heatmap.pdf"
+   shell: """
+      Rscript scripts/snp-dists.R {input} {output}
+   """
+
+

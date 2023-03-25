@@ -1,0 +1,152 @@
+
+# Snakemake pipeline to construct a phylogenetic tree from SNPs
+
+SAMPLES=["CF301_rg", "CF-Nango_rg", "CFR5_rg", "W10_rg", "W12_rg", "W13_rg", "W14a_rg", "W15_rg", "W18_rg", "W20_rg", "W8_rg", "W9_rg", "R4", "W4", "W7"]
+
+
+
+rule all:
+   input:
+      "output/04raxml/RAxML_bipartitionsBranchLabels.snptree"
+
+
+
+##bedtools_intersect: remove SNPs within repeats
+rule bedtools_intersect:
+   conda: "env.yml"
+   input:
+      vcf="data/variants_merged_filt_SNPs.recode.vcf",
+      repeats="data/PB655_01_Race0.bp.p_ctg_sorted_edited.fasta.out.gff"
+   output:
+      "output/01filt_repeats/variants_merged_filt_SNPs_norepeat.recode.vcf"
+   shell: """
+      bedtools intersect -v -header -a {input.vcf} -b {input.repeats}  > {output}
+   """
+
+
+
+##vcf2bed: convert SNPs vcf to bed
+rule vcf2bed:
+   input:
+      "output/01filt_repeats/variants_merged_filt_SNPs_norepeat.recode.vcf"
+   output:
+      "output/01filt_repeats/variants_merged_filt_SNPs_norepeat.recode.bed"
+   shell: """
+      grep -v ^# {input} | awk '{{ print $1"\t"$2-1"\t"$2 }}' > {output}
+   """
+
+
+
+##mosdepth: calculate WGS coverage of the SNPs
+rule mosdepth:
+   conda: "env.yml"
+   input:
+      bam="data/{sample}.bam",
+      bed="output/01filt_repeats/variants_merged_filt_SNPs_norepeat.recode.bed"
+   output:
+      "output/02filt_coverage/{sample}.regions.bed.gz"
+   shell: """
+      mosdepth \
+         --no-per-base \
+         --by {input.bed} \
+         --mapq 30 \
+         output/02filt_coverage/{wildcards.sample} {input.bam}
+   """
+
+
+
+
+##find_poor_supp_snps: get SNPs with too coverage or too high coverage
+rule find_poor_supp_snps:
+   input:
+      "output/02filt_coverage/{sample}.regions.bed.gz"
+   output:
+      "output/02filt_coverage/{sample}.poor_support.bed"
+   shell: """
+      zcat {input} | awk '$NF<=10 || $NF>500' > {output}
+   """
+
+
+
+##combine_poor_supp_snps: get a file with SNPs with too coverage or too high coverage
+rule combine_poor_supp_snps:
+   input:
+      expand("output/02filt_coverage/{sample}.poor_support.bed", sample=SAMPLES)
+   output:
+      "output/02filt_coverage/combined_poor_support.bed"
+   shell: """
+      cat {input} | sort -k1,1 -k2,2n > {output}
+   """
+
+
+
+##filt_poor_supp_snps: remove SNPs that overlap with too coverage or too high coverage
+rule filt_poor_supp_snps:
+   input:
+      bed="output/02filt_coverage/combined_poor_support.bed",
+      vcf="output/01filt_repeats/variants_merged_filt_SNPs_norepeat.recode.vcf"
+   output:
+      vcf="output/02filt_repeats/variants_merged_filt_SNPs_norepeat_wellsupp.recode.vcf"
+   shell: """
+      bedtools intersect -v -header -a {input.vcf} -b {input.bed} > {output.vcf}
+   """
+
+
+
+##vcf2fasta: convert vcf to fasta
+rule vcf2fasta:
+   conda: "env.yml"
+   input:
+      fasta="data/R0.fasta",
+      vcf="output/02filt_repeats/variants_merged_filt_SNPs_norepeat_wellsupp.recode.vcf"
+   output:
+      fasta="output/03vcf2fasta/variants_combined.fasta"
+   shell: """
+      vk phylo fasta {input.vcf} > {output.fasta}
+   """
+
+
+
+##add_ref_alleles: add reference alleles to the fasta file, because vcfkit does no do so.
+rule add_ref_alleles:
+   input:
+      vcf="output/02filt_repeats/variants_merged_filt_SNPs_norepeat_wellsupp.recode.vcf",
+      fasta="output/03vcf2fasta/variants_combined.fasta"
+   output:
+      fasta="output/03vcf2fasta/variants_combined_ref.fasta"
+   shell: """
+      echo ">0WU" > {output.fasta}
+      (grep -v ^# {input.vcf} | cut -f 4 | tr -d '\n'; echo "") >> {output.fasta}
+
+      cat {input.fasta} >> {output.fasta}
+   """
+
+
+
+
+##raxml: infer a tree
+rule raxml:
+   conda: "env.yml"
+   input:
+      fasta="output/03vcf2fasta/variants_combined_ref.fasta"
+   output:
+      "output/04raxml/RAxML_bipartitionsBranchLabels.snptree"
+   log:
+      "logs/raxml.log"
+   shell: """
+      raxmlHPC \
+         -f a \
+         -m ASC_GTRGAMMA \
+         --asc-corr=lewis \
+         -s {input.fasta} \
+         -p 12345 \
+         -x 12345 \
+         -# 100 \
+         -n snptree \
+         -w $(pwd)/output/04raxml/ > {log} 2>&1
+   """
+
+
+
+
+

@@ -1,0 +1,35 @@
+
+# Snakemake pipeline to select SNPs located in unmasked regions of the genome, i.e., avoid SNPs in repeats.
+
+rule all:
+   input:
+      "output/02unmasked_snps/variants_merged_filt_SNPs.recode.vcf"
+
+
+
+##get_unmasked: get regions unmasked of the genome
+rule get_unmasked:
+   conda: "env.yml"
+   input:
+      repeats="data/PB655_01_Race0.bp.p_ctg_sorted_edited.fasta.out.gff",
+      genome="data/genome.txt"
+   output:
+      "output/01unmasked_regions/unmasked.bed"
+   shell: """
+       grep -v ^# {input.repeats} | sort -k1,1 -k4,4n | bedtools complement -i stdin -g {input.genome} > {output}
+   """
+
+
+
+##get_snps_unmasked:  get SNPs that overlap with unmasked regions of the genome
+rule get_snps_unmasked:
+   conda: "env.yml"
+   input:
+      vcf="../02call_snps/output/04vcftools_split/variants_merged_filt_SNPs.recode.vcf",
+      regions="output/01unmasked_regions/unmasked.bed"
+   output:
+      vcf="output/02unmasked_snps/variants_merged_filt_SNPs.recode.vcf"
+   shell: """
+       bedtools intersect -a {input.vcf} -b {input.regions} -nonamecheck -header > {output.vcf}
+   """
+

@@ -1,0 +1,66 @@
+
+# Snakemake pipeline to obtain a PCA plot from SNPs
+
+rule all:
+   input:
+      "plots/plink_pca.pdf"
+
+
+
+##plink_pruning: perform linkage pruning - i.e. identify prune sites
+rule plink_pruning:
+   conda: "env.yml"
+   input:
+      "../03select_snps_unmasked/output/02unmasked_snps/variants_merged_filt_SNPs.recode.vcf", 
+   output:
+      "output/01plink_pruning/cfulv.prune.in"
+   log:
+      "logs/01plink_pruning/plink.log"
+   shell: """
+      plink \
+         --vcf {input}     \
+         --double-id       \
+         --allow-extra-chr \
+         --set-missing-var-ids @:# \
+         --indep-pairwise 10 10 0.5 \
+         --out output/01plink_pruning/cfulv > {log} 2>&1
+   """
+
+
+
+##plink_pca: prune and create pca
+rule plink_pca:
+   conda: "env.yml"
+   input:
+      vcf="../03select_snps_unmasked/output/02unmasked_snps/variants_merged_filt_SNPs.recode.vcf", 
+      prune="output/01plink_pruning/cfulv.prune.in", 
+   output:
+      eigenval="output/02plink_pca/cfulv.eigenval",
+      eigenvec="output/02plink_pca/cfulv.eigenvec"
+   log:
+      "logs/02plink_pca/plink.log"
+   shell: """
+      plink \
+         --vcf {input.vcf}  \
+         --double-id \
+         --allow-extra-chr \
+         --set-missing-var-ids @:# \
+         --extract {input.prune} \
+         --make-bed \
+         --pca \
+         --out output/02plink_pca/cfulv > {log} 2>&1
+      """
+
+
+
+##plot_plink_pca: generate a PCA plot
+rule plot_plink_pca:
+   input:
+      eigenval="output/02plink_pca/cfulv.eigenval",
+      eigenvec="output/02plink_pca/cfulv.eigenvec"
+   output:
+      "plots/plink_pca.pdf"
+   shell: """
+      Rscript scripts/plot_plink_pca.R {input.eigenvec} {input.eigenval} {output}
+   """
+

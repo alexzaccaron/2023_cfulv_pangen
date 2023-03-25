@@ -1,0 +1,41 @@
+
+# Snakemake pipeline to estimate read depth of genes and identify genes deleted (i.e., presence/absence genes)
+
+SAMPLES=["CF301_rg", "CF-Nango_rg", "CFR5_rg", "W10_rg", "W12_rg", "W13_rg", "W14a_rg", "W15_rg", "W18_rg", "W20_rg", "W8_rg", "W9_rg", "R4", "W4", "W7"]
+
+
+rule all:
+   input:
+      expand("output/02missing_genes/{sample}_core_geneids.txt", sample=SAMPLES)
+
+
+
+##mosdepth: calculate coverage with mosdepth
+rule mosdepth:
+   conda: "env.yml"
+   input:
+      bam="data/{sample}.bam",
+      bed="data/R0.bed"
+   output:
+      "output/01mosdepth/{sample}.regions.bed.gz"
+   shell: """
+      mosdepth \
+         --no-per-base \
+         --by {input.bed} \
+         --use-median \
+         output/01mosdepth/{wildcards.sample} {input.bam}
+   """
+
+
+
+##low_cov_genes: identify gene deletion
+rule low_cov_genes:
+   conda: "env.yml"
+   input:
+      "output/01mosdepth/{sample}.regions.bed.gz"
+   output:
+      "output/02missing_genes/{sample}_core_geneids.txt"
+   shell: """
+      # genes in core chromosomes with low
+      zcat {input} | awk '$NF<=2' | grep -v -e chr14 -e chr15 | cut -f 4 > {output}
+   """

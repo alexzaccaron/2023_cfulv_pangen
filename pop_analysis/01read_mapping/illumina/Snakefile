@@ -1,0 +1,65 @@
+
+#Snakemake pipeline to map Illumina reads to a reference genome
+
+SAMPLES=["CF301", "CF-Nango", "CFR5", "W10","W12", "W13", "W14a", "W15", "W18", "W20", "W8", "W9"]
+
+rule all:
+   input:
+      expand("output/03bwa_rg/{sample}_rg.bam", sample=SAMPLES)
+
+
+##fastp: QC of reads
+rule fastp:
+   conda: "env.yml"
+   input: 
+      R1="../data/{sample}_R1.fastq.gz",
+      R2="../data/{sample}_R2.fastq.gz"
+   output: 
+      R1="output/01fastp/{sample}_R1_QCd.fastq.gz",
+      R2="output/01fastp/{sample}_R2_QCd.fastq.gz",
+      html="logs/01fastp/{sample}.html",
+      json="logs/01fastp/{sample}.json"
+   log:
+      "logs/01fastp/{sample}.log"
+   shell: """
+      fastp                   \
+         --in1 {input.R1}     \
+         --in2 {input.R2}     \
+         --out1 {output.R1}   \
+         --out2 {output.R2}   \
+         --html {output.html} \
+         --json {output.json} \
+         --thread 6           \
+         --length_required 40
+   """
+
+
+##bwa_mem: map reads
+rule bwa_mem:
+   conda: "env.yml"
+   input:
+      ref="../data/R0.fasta",
+      R1="output/01fastp/{sample}_R1_QCd.fastq.gz",
+      R2="output/01fastp/{sample}_R2_QCd.fastq.gz",
+   output:
+      bam="output/02bwa/{sample}.bam"
+   log:
+      "logs/02bwa_samblaster/{sample}.log"
+   shell: """
+      #bwa index {input.ref}
+      (bwa mem  -M -t 6 {input.ref} {input.R1} {input.R2} | samblaster | samtools sort -@ 4 -o {output.bam}) > {log} 2>&1
+   """
+
+
+##add_RG: add read group to mapped reads (BAM)
+rule add_RG:
+   conda: "env.yml"
+   input: 
+      bam="output/02bwa/{sample}.bam"
+   output:
+      bam="output/03bwa_rg/{sample}_rg.bam"
+   shell: """
+      bamaddrg -b {input.bam} -s {wildcards.sample} -r {wildcards.sample} > {output.bam}
+   """
+
+

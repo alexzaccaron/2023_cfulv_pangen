@@ -1,0 +1,36 @@
+
+# Snakemake pipeline to map HiFi reads to a reference genome
+
+SAMPLES=["R4", "W4", "W7"]
+
+
+rule all:
+   input:
+      expand("output/02pbmm2_align/{sample}.bam", sample=SAMPLES)
+
+
+##pbmm2_index: Generate index
+rule pbmm2_index:
+   conda: "env.yml"
+   input:
+      "../data/R0.fasta"
+   output:
+      "output/01pbmm2_index/R0.mmi"
+   shell: """
+      pbmm2 index {input} {output}
+   """
+
+
+
+##pbmm2_align: map reads
+rule pbmm2_align:
+   conda: "env.yml"
+   input:
+      read="../data/{sample}.fastq.gz",
+      ref="output/01pbmm2_index/R0.mmi"
+   output:
+      bam="output/02pbmm2_align/{sample}.bam"
+   shell: """
+      pbmm2 align {input.ref} {input.read} {output.bam} -j 8 -J 2 --preset CCS --sort --rg '@RG\tID:{wildcards.sample}\tSM:{wildcards.sample}'
+   """
+
