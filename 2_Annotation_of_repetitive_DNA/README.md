@@ -1,4 +1,4 @@
-# 2 Annotation of repetitive DNA indicates no major differences in transposable element content among five *C. fulvum* genomes
+# 2. Annotation of repetitive DNA indicates no major differences in transposable element content among five *C. fulvum* genomes
 
 ## Obtain repeat libraries
 Repeat libraries constructed with RepeatModeler

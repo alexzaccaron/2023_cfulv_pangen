@@ -1,0 +1,75 @@
+
+SAMPLES=["PB655_02_Race4.bp.p_ctg_sorted_edited", "PB655_01_Race0.bp.p_ctg_sorted_edited", "PB655_03_W4_chr2_8_fixed_edited", "R5", "PB655_04_W7.bp.p_ctg_sorted_edited"]
+
+
+
+rule all:
+   input:
+      expand("output/03blastn_filt/R0_disp_chr_mask_blastn_{sample}.out", sample=SAMPLES)
+      
+
+
+#=============
+rule keep_tes:
+   input:
+      gff="data/R0_repeats.gff"
+   output:
+      gff="output/01TEs_gff/R0_repeats_tes.gff"
+   shell: """
+      grep "Motif:rnd" {input.gff}  > {output.gff}
+   """
+
+
+
+#=============
+rule maskfasta:
+   input:
+      gff="output/01TEs_gff/R0_repeats_tes.gff",
+      fasta="data/R0_disp_chr.fasta"
+   output:
+      fasta="output/01mask_seqs/R0_disp_chr_mask.fasta"
+   shell: """
+      bedtools maskfasta -fi {input.fasta}  -fo {output.fasta} -bed {input.gff}
+   """
+
+
+
+#=============
+rule blastn:
+   input:
+      fasta="output/01mask_seqs/R0_disp_chr_mask.fasta",
+      db="data/{sample}.fasta"
+   output:
+      blastout="output/02blastn/R0_disp_chr_mask_blastn_{sample}.out"
+   shell: """
+      blastn -query {input.fasta} -db {input.db} -outfmt 6 -evalue 1e-10 -task blastn > {output.blastout}
+   """
+
+
+#=============
+rule filter_blastn:
+   input:
+      blastout="output/02blastn/R0_disp_chr_mask_blastn_{sample}.out"
+   output:
+      blastout="output/03blastn_filt/R0_disp_chr_mask_blastn_{sample}.out"
+   shell: """
+      awk '$1!=$2' {input.blastout} > {output.blastout}
+   """
+
+
+
+#=============
+rule bedtools_intersect:
+   input:
+      blastout="output/03blastn_filt/R0_disp_chr_mask_blastn_{sample}.out",
+      genes="data/R0_genes.bed"
+   output:
+      qry="output/04intersect_genes/R0_disp_chr_mask_blastn_qry_interesect.txt",
+      sbj="output/04intersect_genes/R0_disp_chr_mask_blastn_sbj_interesect.txt"
+   shell: """
+      awk -v OFS="\t" '{{ if($7<$8) {{ print $1,$7,$8 }} else print $1,$8,$7 }}' {input.blastout} | \
+      bedtools intersect -a - -b {input.genes} -nonamecheck -wao > {output.qry}
+
+      awk -v OFS="\t" '{{ if($9<$10) {{ print $2,$9,$10 }} else print $2,$10,$9 }}' {input.blastout} | \
+      bedtools intersect -a - -b {input.genes}  -nonamecheck -wao > {output.sbj}
+   """

@@ -1,4 +1,4 @@
-# 1 Near complete genome assemblies of five isolates of *C. fulvum*
+# 1. Near complete genome assemblies of five isolates of *C. fulvum*
 
 ## Genome assembly
 The PacBio HiFi reads of *C. fulvum* isolates 0WU, Race 4, 2 4 5 9 11 IPO, and 2 4 9 11 were assembled with Canu v2.2 with parameter `-pacbio-hifi`:
