@@ -1,0 +1,120 @@
+
+
+rule all:
+   input:
+      "output/01nucmer/R0W7_100k.delta1.coords",
+      "output/01nucmer/R0_20k.delta1.coords",
+      "output/01nucmer/W7_20k.delta1.coords"
+
+
+#==== First ===
+rule nucmer_100k:
+   input:
+      ref="data/R0_chr7_100k.fasta",
+      qry="data/W7_chr7_100k.fasta"
+   output:
+      delta="output/01nucmer/R0W7_100k.delta"
+   shell: """
+      nucmer -p output/01nucmer/R0W7_100k {input.ref} {input.qry}
+   """
+
+
+rule delta_filter_100k:
+   input:
+      delta="output/01nucmer/R0W7_100k.delta"
+   output:
+      delta="output/01nucmer/R0W7_100k.delta1"
+   shell: """
+      delta-filter -1 {input.delta} > {output.delta}
+   """
+
+   
+rule show_coords_100k:
+   input:
+      delta="output/01nucmer/R0W7_100k.delta1"
+   output:
+      coords="output/01nucmer/R0W7_100k.delta1.coords"
+   shell: """
+      show-coords -TH {input.delta} > {output.coords}
+   """
+#===============
+
+
+
+
+
+#==== Second ===
+rule nucmer_R0_20k:
+   input:
+      ref="data/R0_chr7_20k.fasta",
+      qry="data/R0_chr2_20k.fasta"
+   output:
+      delta="output/01nucmer/R0_20k.delta"
+   shell: """
+      nucmer -p output/01nucmer/R0_20k {input.ref} {input.qry}
+   """
+
+
+rule delta_filter_R0_20k:
+   input:
+      delta="output/01nucmer/R0_20k.delta"
+   output:
+      delta="output/01nucmer/R0_20k.delta1"
+   shell: """
+      delta-filter -1 {input.delta} > {output.delta}
+   """
+
+   
+rule show_coords_R0_20k:
+   input:
+      delta="output/01nucmer/R0_20k.delta1"
+   output:
+      coords="output/01nucmer/R0_20k.delta1.coords"
+   shell: """
+      show-coords -TH {input.delta} > {output.coords}
+   """
+#===============
+
+
+
+
+
+
+
+#==== Third ===
+rule nucmer_W7_20k:
+   conda: "env.yml"
+   input:
+      ref="data/W7_chr7_20k.fasta",
+      qry="data/W7_chr2_20k.fasta"
+   output:
+      delta="output/01nucmer/W7_20k.delta"
+   shell: """
+      nucmer -p output/01nucmer/W7_20k {input.ref} {input.qry}
+   """
+
+
+rule delta_filter_W7_20k:
+   conda: "env.yml"
+   input:
+      delta="output/01nucmer/W7_20k.delta"
+   output:
+      delta="output/01nucmer/W7_20k.delta1"
+   shell: """
+      delta-filter -1 {input.delta} > {output.delta}
+   """
+
+   
+rule show_coords_W7_20k:
+   conda: "env.yml"
+   input:
+      delta="output/01nucmer/W7_20k.delta1"
+   output:
+      coords="output/01nucmer/W7_20k.delta1.coords"
+   shell: """
+      show-coords -TH {input.delta} > {output.coords}
+   """
+#===============
+
+
+
