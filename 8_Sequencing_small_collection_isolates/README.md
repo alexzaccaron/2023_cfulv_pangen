@@ -1,4 +1,4 @@
-# 8. Genome sequencing of a small world-wide collection of C. fulvum isolates indicates high levels of gene conservation
+# 8. Genome sequencing of a small world-wide collection of *C. fulvum* isolates indicates high levels of gene conservation
 
 ## Read mapping
 In the directory `01read_mapping`, there are two `Snakefile` files with Snakemake workflows to map Illumina and HiFi reads to the reference. For Illumina, reads are QC with `fastp`, mapped with `bwa mem`, and then read groups are added to the resulting `bam` files. For HiFi, reads are mapped with `pbmm2`. Read groups are passed as parameter to `pbmm2` during mapping.
@@ -18,3 +18,7 @@ In the directory `05snp_dist_heatmap`, there is a `Snakefile` with a Snakemake w
 
 ## Annotate impact of SNPs
 In the directory `06snpeff`, there is a `Snakefile` with a Snakemake workflow to annotate SNPs and INDELs. It uses `SnpEff` to build a custom database from the gene annotation, and then SNPs and INDELs are annotated. The script `scripts/get_lof_genes.R` extracts genes predicted to harbor loss of function mutations, i.e., stop or start codon lost, premature stop codon, and frameshift variants.
+
+
+## Calculate coverage of genes
+In the directory `07mosdepth`, there is a `Snakefile` with a Snakemake workflow to calculate coverage of the genes based on the mapped reads. This is used to find cases of presence/absence. It uses `mosdepth` to calculate the median coverage of the genes (given in `bed` format). Then, it finds genes in the core chromosomes with median coverate of less than 2, which are considered absent in the respective isolate.
