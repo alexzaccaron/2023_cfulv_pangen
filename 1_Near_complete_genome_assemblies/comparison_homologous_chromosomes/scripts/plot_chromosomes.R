@@ -25,8 +25,8 @@ for(file in list.files("output/01files/", pattern = "repeats.bed", full.names = 
 
 
 #== Parse
-windows_genes[windows_genes$count > 20, 'count'] = 20 # max count of 20. Only few windows with count > 20
-windows_repeats$cov = round(windows_repeats$cov*100) # convert to percentage
+windows_genes[windows_genes$count > 20, 'count'] = 20   # max count of 20. Only few windows with count > 20
+windows_repeats$cov = round(windows_repeats$cov*100)    # convert to percentage
 #==
 
 
@@ -83,7 +83,7 @@ for(chromo in  chromosomes ){
   
   x_pos = x_pos + offset
   
-  for( str in c("R5", "R0", "W7", "W4", "R4")){ # splicily specifying strains, stead of names(table(windows_genes$strain))
+  for( str in c("R5", "R0", "W7", "W4", "R4")){        # splicily specifying strains, stead of names(table(windows_genes$strain))
     gene_track_plot   = subset(windows_genes,   chr == chromo & strain == str)
     repeat_track_plot   = subset(windows_repeats, chr == chromo & strain == str)
     
@@ -100,13 +100,6 @@ for(chromo in  chromosomes ){
 draw_scale()
 
 dev.off()
-
-
-
-
-
-
-
 
 
 

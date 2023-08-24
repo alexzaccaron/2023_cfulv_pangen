@@ -1,4 +1,9 @@
 
+# Snakemake pipeline with the purpose to count number of genes and repetitive DNA across the chromosomes of the genomes
+# and to make a plot showing the entire chromosomes and values of windows
+
+
+# C. fulvum isolates
 SAMPLES=["R0", "R4", "R5", "W4", "W7"]
 
 
@@ -10,49 +15,59 @@ rule all:
 
 
 
+##makewindows: create sliding window coordinates across the genomes
 rule makewindows:
    conda: "env.yml"
    input:
-      fai="data/{sample}.fai"
+      fai="data/{sample}.fai"                 # fai idex produced with samtools faidx
    output:
-      "output/01files/{sample}_windows.bed"
+      "output/01files/{sample}_windows.bed"   # windows coordinates in BED format
+   params:
+      wsize=30000                             # size of sliding window
    shell: """
-       cut -f 1,2 {input.fai}  | bedtools makewindows -w 30000 -g stdin > {output}
+       cut -f 1,2 {input.fai}  | \
+          bedtools makewindows -w {params.wsize} -g stdin > {output}
    """
 
 
 
+##gene_count: count number of genes within each sliding window
 rule gene_count:
    conda: "env.yml"
    input:
-      windows="output/01files/{sample}_windows.bed",
-      genes="data/{sample}.bed"
+      windows="output/01files/{sample}_windows.bed",    # windows coordinates in BED format
+      genes="data/{sample}.bed"                         # gene coordinates in BED format
    output:
-      "output/01files/{sample}_windows_genes.bed"
+      "output/01files/{sample}_windows_genes.bed"       # BED file with gene count within windows
    shell: """
-       bedtools intersect -c -a {input.windows} -b {input.genes}  | awk  '{{ print $0"\t {wildcards.sample}" }}' > {output}
+       bedtools intersect -c -a {input.windows} -b {input.genes} | \
+          awk  '{{ print $0"\t {wildcards.sample}" }}' > {output}    # add sample name at the end. This info is useful
    """
 
 
 
+##repeat_count: calculate percentage of repetitive DNA within sliding windows
 rule repeat_count:
    conda: "env.yml"
    input:
-      windows="output/01files/{sample}_windows.bed",
-      repeats="data/{sample}_repeats.gff"
+      windows="output/01files/{sample}_windows.bed",    # windows coordinates in BED format
+      repeats="data/{sample}_repeats.gff"               # repeats in GFF format, output of RepeatMasker
    output:
-      "output/01files/{sample}_windows_repeats.bed"
+      "output/01files/{sample}_windows_repeats.bed"     # BED file with repeat content within windows
    shell: """
-       bedtools coverage -a {input.windows} -b {input.repeats}  | awk  '{{ print $0"\t {wildcards.sample}" }}' > {output}
+       bedtools coverage -a {input.windows} -b {input.repeats} | \
+          awk  '{{ print $0"\t {wildcards.sample}" }}' > {output}    # add sample name at the end. This info is useful
    """
 
 
+
+##plot_chromosomes: call script plot_chromosomes.R to make a plot with chromosomes and windows with gene count and repeat coverage
 rule plot_chromosomes:
    input:
-      expand("output/01files/{sample}_windows_genes.bed", sample=SAMPLES),
-      expand("output/01files/{sample}_windows_repeats.bed", sample=SAMPLES),
+      expand("output/01files/{sample}_windows_genes.bed", sample=SAMPLES),     # gene number counted 
+      expand("output/01files/{sample}_windows_repeats.bed", sample=SAMPLES),   # reepat coverage estimated
    output:
-      "chromosomes.pdf"
+      "chromosomes.pdf"     # output plot PDF
    shell: """
        Rscript scripts/plot_chromosomes.R
    """
